@@ -1,3 +1,4 @@
+use core::fmt;
 use std::vec::Vec;
 
 #[derive(Default, Clone, Copy)]
@@ -52,6 +53,23 @@ impl ChunkTree {
     }
 }
 
+impl fmt::Display for ChunkTree {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        for (chunk, off) in &self.vec {
+            write!(
+                f,
+                "Logical start {}, Logical size {}, Physical off: {}",
+                chunk.start, chunk.size, off
+            )?;
+        }
+
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::ChunkTree;
@@ -118,5 +136,4 @@ mod tests {
         );
         assert_eq!(insert2.err(), None);
     }
-
 }
