@@ -23,8 +23,7 @@ impl BtrfsSuperblock {
         Ok(())
     }
 
-    pub fn check_valid_superblock(&mut self, path: &str, debug: bool) -> io::Result<()> {
-        let file = File::open(path)?;
+    pub fn check_valid_superblock(&mut self, file: &File, debug: bool) -> io::Result<()> {
         self.get_superblock(&file)?;
 
         if self.magic != BTRFS_SUPERBLOCK_MAGIC {

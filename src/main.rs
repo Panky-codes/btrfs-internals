@@ -1,5 +1,7 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use std::env;
+use std::fs::File;
 use std::io;
 
 use btrfs_internals::{
@@ -54,11 +56,20 @@ fn parse_sys_chunk_array(sb: &BtrfsSuperblock) -> Result<ChunkTree, i32> {
     Ok(chunk_tree)
 }
 
+// fn read_chunk_tree_root()
 fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        println!("No arguments provided");
+        println!("usage: btrfs-internals <image>");
+        panic!();
+    }
+    let file = File::open(&args[1])?;
     let mut superblock = BtrfsSuperblock::new();
 
-    superblock.check_valid_superblock("image", false)?;
-    let parse_res = parse_sys_chunk_array(&superblock).unwrap_or_else(|error| {
+    superblock.check_valid_superblock(&file, false)?;
+    let parsed_chunktree = parse_sys_chunk_array(&superblock).unwrap_or_else(|error| {
         panic!("Error parsing the sys chunk arr");
     });
 
