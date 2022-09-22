@@ -74,7 +74,7 @@ impl fmt::Display for ChunkTree {
         for (chunk, off) in &self.vec {
             write!(
                 f,
-                "Logical start {}, Logical size {}, Physical off: {}",
+                "Logical start {}, Logical size {}, Physical off: {}\n",
                 chunk.start, chunk.size, off
             )?;
         }
