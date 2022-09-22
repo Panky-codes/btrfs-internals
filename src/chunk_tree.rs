@@ -9,22 +9,30 @@ pub struct ChunkTreeKey {
 pub struct ChunkTree {
     vec: Vec<(ChunkTreeKey, u64)>,
 }
+enum Overlap {
+    YES,
+    NO,
+    DUP,
+}
 
 impl ChunkTree {
     pub fn new() -> ChunkTree {
         ChunkTree { vec: vec![] }
     }
 
-    fn check_for_overlap(&self, key: &ChunkTreeKey) -> bool {
+    fn check_for_overlap(&self, key: &ChunkTreeKey) -> Overlap {
         let key_range_end = key.start + key.size;
         for (k, _) in &self.vec {
-            if key.start >= k.start && key.start < (k.start + k.size)
-                || key_range_end >= k.start && key_range_end < (k.start + k.size)
+            if key.start > k.start && key.start < (k.start + k.size)
+                || key_range_end > k.start && key_range_end < (k.start + k.size)
             {
-                return true;
+                return Overlap::YES;
+            }
+            if k.start == key.start {
+                return Overlap::DUP;
             }
         }
-        return false;
+        return Overlap::NO;
     }
 
     pub fn find_logical(&self, logical: u64) -> Option<(ChunkTreeKey, u64)> {
@@ -43,12 +51,16 @@ impl ChunkTree {
         None
     }
     pub fn insert(&mut self, key: ChunkTreeKey, offset: u64) -> Result<i32, i32> {
-        if self.check_for_overlap(&key) {
-            println!("Overlapping chunks");
-            return Err(1);
+        match self.check_for_overlap(&key) {
+            Overlap::NO => {
+                self.vec.push((key, offset));
+            }
+            Overlap::YES => {
+                println!("Overlapping chunks");
+                return Err(1);
+            }
+            Overlap::DUP => {}
         }
-
-        self.vec.push((key, offset));
         Ok(0)
     }
 }
