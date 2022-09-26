@@ -9,7 +9,7 @@ use btrfs_internals::chunk_tree_cache::ChunkTree;
 use btrfs_internals::ctree::{parse_sys_chunk_array, read_chunk_tree_root, walk_chunk_root_tree};
 use btrfs_internals::structs::{
     BtrfsHeader, BtrfsItem, BtrfsRootItem, BtrfsSuperblock, BTRFS_FS_TREE_OBJECTID,
-    BTRFS_ROOT_ITEM_KEY,
+    BTRFS_ROOT_ITEM_KEY, BtrfsChunk,
 };
 
 fn read_root_tree(file: &File, root_logical: u64, cache: &ChunkTree) -> Result<Vec<u8>> {
@@ -85,7 +85,7 @@ fn main() -> Result<()> {
     // fill chunk tree
     let chunk_tree_root = read_chunk_tree_root(&file, superblock.chunk_root, &chunktree_cache)?;
 
-    walk_chunk_root_tree(
+    walk_chunk_root_tree::<BtrfsChunk>(
         &file,
         &chunk_tree_root,
         &mut chunktree_cache,

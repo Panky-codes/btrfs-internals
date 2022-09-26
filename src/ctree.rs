@@ -75,7 +75,7 @@ pub fn read_chunk_tree_root(
     Ok(chunk_root)
 }
 
-pub fn walk_chunk_root_tree(
+pub fn walk_chunk_root_tree<T>(
     file: &File,
     buf: &Vec<u8>,
     cache: &mut ChunkTree,
@@ -100,7 +100,7 @@ pub fn walk_chunk_root_tree(
             let chunk = unsafe {
                 &*((buf.as_ptr() as usize
                     + std::mem::size_of::<BtrfsHeader>()
-                    + item.offset as usize) as *const BtrfsChunk)
+                    + item.offset as usize) as *const T)
             };
 
             let off = item.key.offset;
@@ -129,7 +129,7 @@ pub fn walk_chunk_root_tree(
 
             let mut node = vec![0; nodesize as usize];
             file.read_exact_at(&mut node, physical_offset)?;
-            walk_chunk_root_tree(&file, &node, cache, nodesize)?;
+            walk_chunk_root_tree::<T>(&file, &node, cache, nodesize)?;
         }
     }
     Ok(())
