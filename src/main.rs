@@ -9,8 +9,9 @@ use anyhow::{bail, Ok, Result};
 use btrfs_internals::chunk_tree_cache::ChunkTree;
 use btrfs_internals::ctree::{parse_sys_chunk_array, read_chunk_tree_root, walk_chunk_root_tree};
 use btrfs_internals::structs::{
-    BtrfsHeader, BtrfsInodeRef, BtrfsItem, BtrfsKey, BtrfsKeyPtr, BtrfsRootItem, BtrfsSuperblock,
-    BTRFS_FS_TREE_OBJECTID, BTRFS_INODE_REF_KEY, BTRFS_ROOT_ITEM_KEY,
+    BtrfsDirItem, BtrfsHeader, BtrfsInodeRef, BtrfsItem, BtrfsKey, BtrfsKeyPtr, BtrfsRootItem,
+    BtrfsSuperblock, BTRFS_DIR_ITEM_KEY, BTRFS_FS_TREE_OBJECTID, BTRFS_FT_REG_FILE,
+    BTRFS_INODE_REF_KEY, BTRFS_ROOT_ITEM_KEY,
 };
 
 fn read_root_tree(file: &File, root_logical: u64, cache: &ChunkTree) -> Result<Vec<u8>> {
@@ -137,6 +138,78 @@ fn read_inode_ref_items(
     }
     Ok(())
 }
+
+fn print_file_path(
+    file: &File,
+    fs_tree: &Vec<u8>,
+    cache: &ChunkTree,
+    nodesize: u32,
+    inode_ref_cache: &HashMap<u64, InodeRefT>,
+) -> Result<()> {
+    let header = unsafe { &*(fs_tree.as_ptr() as *const BtrfsHeader) };
+
+    // At the leaf
+    if header.level == 0 {
+        for i in 0..header.nritems as usize {
+            let item = unsafe {
+                &*((fs_tree.as_ptr() as usize
+                    + std::mem::size_of::<BtrfsHeader>()
+                    + (i * std::mem::size_of::<BtrfsItem>()))
+                    as *const BtrfsItem)
+            };
+
+            if item.key.ty != BTRFS_DIR_ITEM_KEY {
+                continue;
+            }
+
+            let dir_item = unsafe {
+                &*((fs_tree.as_ptr() as usize
+                    + std::mem::size_of::<BtrfsHeader>()
+                    + item.offset as usize) as *const BtrfsDirItem)
+            };
+
+            if dir_item.ty != BTRFS_FT_REG_FILE {
+                continue;
+            }
+
+            let mut path = String::with_capacity(1);
+            let mut curr_inode_nr = dir_item.location.objectid;
+            loop {
+                let inode_ref = inode_ref_cache
+                    .get(&curr_inode_nr)
+                    .expect("Couldn't find inode");
+
+                let parent_inode_nr = inode_ref.key.offset;
+
+                if curr_inode_nr == parent_inode_nr {
+                    break;
+                }
+                path.insert_str(0, &format!("/{}" ,&inode_ref.name));
+                // Traverse to the parent inode
+                curr_inode_nr = parent_inode_nr;
+            }
+            println!("file: {}", path);
+        }
+    } else {
+        println!("Node");
+        for i in 0..header.nritems as usize {
+            let keyptr = unsafe {
+                &*((fs_tree.as_ptr() as usize
+                    + std::mem::size_of::<BtrfsHeader>()
+                    + (i * std::mem::size_of::<BtrfsKeyPtr>()))
+                    as *const BtrfsKeyPtr)
+            };
+
+            let physical_offset = cache.offset(keyptr.blockptr).expect("error getting offset");
+
+            let mut node = vec![0; nodesize as usize];
+            file.read_exact_at(&mut node, physical_offset)?;
+            print_file_path(file, fs_tree, cache, nodesize, inode_ref_cache)?;
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
@@ -173,9 +246,20 @@ fn main() -> Result<()> {
 
     let mut inode_ref_map = HashMap::new();
 
-    read_inode_ref_items(&file, &fs_tree_root, &chunktree_cache, superblock.node_size, &mut inode_ref_map)?;
+    read_inode_ref_items(
+        &file,
+        &fs_tree_root,
+        &chunktree_cache,
+        superblock.node_size,
+        &mut inode_ref_map,
+    )?;
 
-    println!("{:?}", inode_ref_map);
-
+    print_file_path(
+        &file,
+        &fs_tree_root,
+        &chunktree_cache,
+        superblock.node_size,
+        &inode_ref_map,
+    )?;
     Ok(())
 }
