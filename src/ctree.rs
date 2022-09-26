@@ -34,12 +34,11 @@ pub fn parse_sys_chunk_array(sb: &BtrfsSuperblock) -> Result<ChunkTree, i32> {
             panic!("num stripes cannot be zero");
         }
 
-        if num_stripes != 1 {
-            println!("num stripes more than one! : {}", num_stripes);
-        }
-
         let length = btrfschunk.length;
 
+        // Ignoring the second stripe
+        // One stripe is already a part of BtrfsChunk, and that is why
+        //(num_stripes - 1) * stripe_size
         offset += chunk_size + (num_stripes - 1) * stripe_size;
 
         chunk_tree.insert(
