@@ -10,9 +10,10 @@ use btrfs_internals::chunk_tree_cache::ChunkTree;
 use btrfs_internals::ctree::{parse_sys_chunk_array, read_chunk_tree_root, walk_chunk_root_tree};
 use btrfs_internals::structs::{
     BtrfsDirItem, BtrfsHeader, BtrfsInodeRef, BtrfsItem, BtrfsKey, BtrfsKeyPtr, BtrfsRootItem,
-    BtrfsSuperblock, BTRFS_DIR_ITEM_KEY, BTRFS_FS_TREE_OBJECTID, BTRFS_FT_REG_FILE,
-    BTRFS_INODE_REF_KEY, BTRFS_ROOT_ITEM_KEY,
+    BtrfsSuperblock, BTRFS_DIR_ITEM_KEY, BTRFS_FIRST_FREE_OBJECTID, BTRFS_FS_TREE_OBJECTID,
+    BTRFS_FT_REG_FILE, BTRFS_INODE_REF_KEY, BTRFS_ROOT_ITEM_KEY,
 };
+use regex::Regex;
 
 fn read_root_tree(file: &File, root_logical: u64, cache: &ChunkTree) -> Result<Vec<u8>> {
     let size = cache
@@ -184,7 +185,7 @@ fn print_file_path(
                 if curr_inode_nr == parent_inode_nr {
                     break;
                 }
-                path.insert_str(0, &format!("/{}" ,&inode_ref.name));
+                path.insert_str(0, &format!("/{}", &inode_ref.name));
                 // Traverse to the parent inode
                 curr_inode_nr = parent_inode_nr;
             }
@@ -208,6 +209,33 @@ fn print_file_path(
         }
     }
     Ok(())
+}
+
+// return the file inode
+// path should be absolute
+fn lookup_path(path: &str, inode_ref_cache: &HashMap<u64, InodeRefT>) -> Result<u64> {
+    let mut parent_ino = BTRFS_FIRST_FREE_OBJECTID as u64;
+    let re = Regex::new(r"([\w+|\.]+)").unwrap();
+    let mut cap_idx = 0;
+    let mut match_idx = 0;
+
+    for cap in re.captures_iter(path) {
+        let item = &cap[1];
+        cap_idx += 1;
+        // Lookup a bit inefficient as we loop through all dir items
+        for (ino, inode_ref) in inode_ref_cache {
+            if inode_ref.key.offset == parent_ino && item == inode_ref.name {
+                match_idx += 1;
+                parent_ino = *ino;
+                break;
+            }
+        }
+        // Early return on invalid path as we don't store the fs tree type
+        if match_idx != cap_idx {
+            bail!("Invalid file path")
+        }
+    }
+    Ok(parent_ino)
 }
 
 fn main() -> Result<()> {
@@ -261,5 +289,9 @@ fn main() -> Result<()> {
         superblock.node_size,
         &inode_ref_map,
     )?;
+
+    let ino = lookup_path("/hello/yellp/heh.txt", &inode_ref_map)?;
+    println!("{:?}", inode_ref_map[&ino]);
+
     Ok(())
 }
